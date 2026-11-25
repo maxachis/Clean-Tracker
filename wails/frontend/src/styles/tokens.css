@@ -1,0 +1,34 @@
+/* Every color, size and font decision lives here. Components use var(--*) only. */
+:root {
+  --paper: #efece4;
+  --panel: #fbfaf6;
+  --ink: #14120e;
+  --ink-soft: #5d584c;
+  --rule: #cfc9ba;
+  --signal: #2237ff;       /* the active countdown */
+  --signal-ink: #ffffff;
+  --signal-wash: #dfe2ff;
+  --miss: #ff3b0f;         /* hot red-orange: misses only */
+  --done: #14120e;
+  --done-wash: #dcd7c8;
+
+  --font: "Archivo Variable", "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --wdth-wide: 118;
+  --wdth-normal: 100;
+
+  --border: 2.5px solid var(--ink);
+  --shadow: 4px 4px 0 var(--ink);
+  --shadow-pressed: 1px 1px 0 var(--ink);
+  --radius: 8px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 20px;
+  --space-5: 32px;
+  --gutter: 16px;
+
+  --ring-size: min(62vmin, 420px);
+  --ring-stroke: 16;
+  --flash-ms: 900ms;
+}
