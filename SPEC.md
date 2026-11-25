@@ -84,7 +84,7 @@ every miss.
 outstanding:
 
 ```
-per_action = max((L - t) / n, MIN_ACTION_SECONDS)   // MIN_ACTION_SECONDS = 1
+per_action = max((L - t) / n, M)   // M = the session's minimum seconds per action
 deadline   = min(t + per_action, L)
 ```
 
@@ -104,11 +104,17 @@ Then apply the event:
 2. Active time reaches `L`: `time_up`. A deadline landing exactly on `L`, where `n` is still above 0, is not counted as a miss, since time-up already covers it.
 3. An `end` event: `abandoned`.
 
-**Why the floor exists.** Without it, repeated misses shrink the countdown
-geometrically toward `L` without ever reaching it, which means infinitely many
-misses. Each miss multiplies the remaining time by `(1 − 1/n)`. The
-one-second floor keeps the miss count finite. Near the end of an overrun
-session, misses still come fast. That's intended.
+**The minimum per action (`M`).** Without a floor, repeated misses shrink
+the countdown geometrically toward `L` without ever reaching it, which means
+infinitely many misses. Each miss multiplies the remaining time by
+`(1 − 1/n)`. `M` is a user setting with a default of 10 seconds and a range
+of 1–600. It means misses never come faster than once every `M` seconds, so
+an overrun session ends with a steady beat instead of a flurry. *(Decided:
+the user picked a customizable fixed minimum over keeping a 1-second floor or
+stopping misses at an "overdue" state.)* The value is copied onto the session
+when it starts, so changing the setting never rewrites a past or running
+session. The cap at `L` still applies, so the final countdown can be shorter
+than `M`.
 
 **Snapshot.** Replay returns everything the UI needs:
 
@@ -134,6 +140,7 @@ missed total goes up.
 | length_seconds | Integer | The planned session length. Editable while a draft. |
 | created_at | DateTime | |
 | started_at | DateTime | Null while a draft |
+| min_action_seconds | Integer | `M`, copied from settings at start |
 | ended_at | DateTime | Written once replay finds a terminal status |
 | end_status | Enum | `completed`, `time_up` or `abandoned`. Null until it ends. |
 
@@ -173,6 +180,7 @@ complete.
 |-------|---------|-------|
 | last_session_minutes | 30 | Pre-fills the session length |
 | miss_sound | on | |
+| min_action_seconds | 10 | `M` for new sessions. Edited on the collection screen. |
 
 ## Edge Cases
 

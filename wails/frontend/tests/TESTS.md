@@ -14,6 +14,7 @@ Run with `npm test`. Component tests run the real `App` against the in-memory fa
 ## pace.test.ts
 
 - **averageSecondsPerAction / sumCounts**: Verifies the live "N actions · ~m:ss each" math, including no result for an empty list or zero minutes.
+- **isBelowMinimum**: Verifies the pace warning fires only when the even split is under the per-action minimum, never with no average.
 - **choreCompletion**: Verifies summary bar fractions (done / target, capped at 1).
 
 ## keys.test.ts
@@ -22,11 +23,11 @@ Run with `npm test`. Component tests run the real `App` against the in-memory fa
 
 ## fakeBackend.test.ts
 
-- **fake backend replay**: Pins the minimal timer port to SPEC.md: even split per action, a miss leaves the action outstanding and shortens the next countdown, time_up at session end, completion on the last action, pause freezes the clock, undo restores an action.
+- **fake backend replay**: Pins the minimal timer port to SPEC.md: even split per action, a miss leaves the action outstanding and shortens the next countdown, time_up at session end, completion on the last action, pause freezes the clock, undo restores an action; the countdown is held at the session's minimum (copied from the setting at start, unaffected by later changes) and out-of-range minimums are rejected.
 
 ## collection.test.ts
 
-- **Collection screen**: Start is disabled without chores or with zero minutes; adding chores updates total actions and average time live; backend rejections show inline; suggestion chips add in one tap; chores can be reordered and removed.
+- **Collection screen**: Start is disabled without chores or with zero minutes; adding chores updates total actions and average time live; backend rejections show inline; suggestion chips add in one tap; chores can be reordered and removed; the "Minimum per action" input saves the setting on change, shows an out-of-range rejection inline, and the pace line warns "below your 0:10 minimum" only when the even split is under it.
 
 ## execution.test.ts
 

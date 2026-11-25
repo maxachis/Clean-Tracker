@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { averageSecondsPerAction, choreCompletion, sumCounts } from "../src/lib/services/pace";
+import { averageSecondsPerAction, choreCompletion, isBelowMinimum, sumCounts } from "../src/lib/services/pace";
 
 describe("averageSecondsPerAction", () => {
   // The collection screen shows "12 actions · ~2:30 each" for 30 minutes.
@@ -10,6 +10,20 @@ describe("averageSecondsPerAction", () => {
   it("is undefined with no actions or no time", () => {
     expect(averageSecondsPerAction({ totalActions: 0, minutes: 30 })).toBeNull();
     expect(averageSecondsPerAction({ totalActions: 5, minutes: 0 })).toBeNull();
+  });
+});
+
+describe("isBelowMinimum", () => {
+  // The even split can be shorter than the minimum per action; the collection
+  // screen warns because the real countdown will be held at the minimum.
+  it("is true only when the even split is under the minimum", () => {
+    expect(isBelowMinimum({ averageSeconds: 9, minimumSeconds: 10 })).toBe(true);
+    expect(isBelowMinimum({ averageSeconds: 10, minimumSeconds: 10 })).toBe(false);
+    expect(isBelowMinimum({ averageSeconds: 150, minimumSeconds: 10 })).toBe(false);
+  });
+
+  it("is false when there is no average to compare", () => {
+    expect(isBelowMinimum({ averageSeconds: null, minimumSeconds: 10 })).toBe(false);
   });
 });
 

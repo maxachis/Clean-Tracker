@@ -11,10 +11,12 @@ import (
 // Events may arrive in any order; Replay orders them by time, then ID.
 type ReplayInput struct {
 	LengthSeconds int
-	StartedAt     time.Time
-	Chores        []model.Chore
-	Events        []model.Event
-	Now           time.Time
+	// MinActionSeconds is the session's minimum seconds per action (M in SPEC.md).
+	MinActionSeconds int
+	StartedAt        time.Time
+	Chores           []model.Chore
+	Events           []model.Event
+	Now              time.Time
 }
 
 // Replay computes a session's full execution state from its stored facts
@@ -50,6 +52,7 @@ func sortedEvents(events []model.Event) []model.Event {
 // (wall time since start, minus time spent paused) unless named wall.
 type replayer struct {
 	length      float64
+	minAction   float64
 	chores      []model.Chore
 	outstanding map[string]int
 	doneStack   []string // chore IDs of dones not yet undone, oldest first
@@ -69,6 +72,7 @@ type replayer struct {
 func newReplayer(in ReplayInput) *replayer {
 	r := &replayer{
 		length:      float64(in.LengthSeconds),
+		minAction:   float64(max(in.MinActionSeconds, model.MinMinActionSeconds)),
 		chores:      in.Chores,
 		outstanding: make(map[string]int, len(in.Chores)),
 		wall:        in.StartedAt,
@@ -96,10 +100,7 @@ func (r *replayer) finish(status model.SessionStatus, at time.Time) {
 // current totals.
 func (r *replayer) reset() {
 	r.resetAt = r.active
-	perAction := (r.length - r.active) / float64(r.remaining)
-	if perAction < model.MinActionSeconds {
-		perAction = model.MinActionSeconds
-	}
+	perAction := max((r.length-r.active)/float64(r.remaining), r.minAction)
 	r.deadline = r.active + perAction
 	if r.deadline > r.length {
 		r.deadline = r.length

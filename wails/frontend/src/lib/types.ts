@@ -24,6 +24,7 @@ export function isTerminal(status: SessionStatus): boolean {
 export interface Session {
   id: string;
   length_seconds: number;
+  min_action_seconds: number;
   created_at: string;
   started_at?: string;
   ended_at?: string;
@@ -79,6 +80,7 @@ export interface Summary {
 export interface Settings {
   last_session_minutes: number;
   miss_sound: boolean;
+  min_action_seconds: number;
 }
 
 export interface ChoreInput {

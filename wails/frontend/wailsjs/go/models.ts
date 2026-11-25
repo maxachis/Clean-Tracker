@@ -57,6 +57,7 @@ export namespace model {
 	export class Session {
 	    id: string;
 	    length_seconds: number;
+	    min_action_seconds: number;
 	    created_at: any;
 	    started_at?: any;
 	    ended_at?: any;
@@ -70,6 +71,7 @@ export namespace model {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
 	        this.length_seconds = source["length_seconds"];
+	        this.min_action_seconds = source["min_action_seconds"];
 	        this.created_at = source["created_at"];
 	        this.started_at = source["started_at"];
 	        this.ended_at = source["ended_at"];
@@ -162,6 +164,7 @@ export namespace model {
 	export class Settings {
 	    last_session_minutes: number;
 	    miss_sound: boolean;
+	    min_action_seconds: number;
 
 	    static createFrom(source: any = {}) {
 	        return new Settings(source);
@@ -171,6 +174,7 @@ export namespace model {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.last_session_minutes = source["last_session_minutes"];
 	        this.miss_sound = source["miss_sound"];
+	        this.min_action_seconds = source["min_action_seconds"];
 	    }
 	}
 	export class Summary {
@@ -213,6 +217,7 @@ export namespace model {
 	export class UpdateSettingsRequest {
 	    last_session_minutes: number;
 	    miss_sound: boolean;
+	    min_action_seconds: number;
 
 	    static createFrom(source: any = {}) {
 	        return new UpdateSettingsRequest(source);
@@ -222,6 +227,7 @@ export namespace model {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.last_session_minutes = source["last_session_minutes"];
 	        this.miss_sound = source["miss_sound"];
+	        this.min_action_seconds = source["min_action_seconds"];
 	    }
 	}
 

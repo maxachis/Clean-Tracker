@@ -14,6 +14,16 @@ export function averageSecondsPerAction(options: PaceOptions): number | null {
   return (minutes * SECONDS_PER_MINUTE) / totalActions;
 }
 
+export interface MinimumCheck {
+  averageSeconds: number | null;
+  minimumSeconds: number;
+}
+
+/** True when the even split is shorter than the per-action minimum (the timer will hold at the minimum). */
+export function isBelowMinimum(check: MinimumCheck): boolean {
+  return check.averageSeconds !== null && check.averageSeconds < check.minimumSeconds;
+}
+
 export function sumCounts(chores: { count: number }[]): number {
   return chores.reduce((sum, c) => sum + c.count, 0);
 }

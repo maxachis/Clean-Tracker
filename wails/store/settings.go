@@ -11,8 +11,8 @@ import (
 // GetSettings returns the singleton settings row.
 func (s *Store) GetSettings() (model.Settings, error) {
 	var st model.Settings
-	err := s.DB.QueryRow(`SELECT last_session_minutes, miss_sound FROM settings WHERE id = 1`).
-		Scan(&st.LastSessionMinutes, &st.MissSound)
+	err := s.DB.QueryRow(`SELECT last_session_minutes, miss_sound, min_action_seconds FROM settings WHERE id = 1`).
+		Scan(&st.LastSessionMinutes, &st.MissSound, &st.MinActionSeconds)
 	if errors.Is(err, sql.ErrNoRows) {
 		return model.Settings{}, ErrNotFound
 	}
@@ -24,6 +24,6 @@ func (s *Store) GetSettings() (model.Settings, error) {
 
 func (s *Store) UpdateSettings(st model.Settings) error {
 	return s.execOne("update settings",
-		`UPDATE settings SET last_session_minutes = ?, miss_sound = ? WHERE id = 1`,
-		st.LastSessionMinutes, st.MissSound)
+		`UPDATE settings SET last_session_minutes = ?, miss_sound = ?, min_action_seconds = ? WHERE id = 1`,
+		st.LastSessionMinutes, st.MissSound, st.MinActionSeconds)
 }

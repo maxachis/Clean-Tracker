@@ -2,11 +2,6 @@ package model
 
 import "time"
 
-// MinActionSeconds is the shortest countdown a reset point can set. Without
-// it, repeated misses would shrink the countdown toward the session end
-// without reaching it, giving infinitely many misses.
-const MinActionSeconds = 1.0
-
 // ChoreProgress is one chore's standing in a snapshot.
 type ChoreProgress struct {
 	ID          string `json:"id"`

@@ -36,9 +36,10 @@ func (s *Service) createDraft() (model.Session, error) {
 		return model.Session{}, fmt.Errorf("seed draft length: %w", err)
 	}
 	sess := model.Session{
-		ID:            uuid.NewString(),
-		LengthSeconds: settings.LastSessionMinutes * model.SecondsPerMinute,
-		CreatedAt:     s.clock(),
+		ID:               uuid.NewString(),
+		LengthSeconds:    settings.LastSessionMinutes * model.SecondsPerMinute,
+		MinActionSeconds: settings.MinActionSeconds,
+		CreatedAt:        s.clock(),
 	}
 	if err := s.Store.InsertSession(sess); err != nil {
 		return model.Session{}, err

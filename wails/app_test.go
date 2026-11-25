@@ -98,7 +98,7 @@ func exerciseEveryEndpoint(t *testing.T, app *App, clock *appClock) {
 		t.Fatalf("repeat = %+v", repeated)
 	}
 
-	settings := must(app.UpdateSettings(model.UpdateSettingsRequest{LastSessionMinutes: 25, MissSound: false}))
+	settings := must(app.UpdateSettings(model.UpdateSettingsRequest{LastSessionMinutes: 25, MissSound: false, MinActionSeconds: 15}))
 	if got := must(app.GetSettings()); got != settings || got.MissSound {
 		t.Fatalf("settings = %+v", got)
 	}

@@ -33,6 +33,27 @@ describe("fake backend replay", () => {
     expect(view?.snapshot.action_seconds_total).toBeCloseTo(150);
   });
 
+  // SPEC: per_action = max(even split, M). L=60, 2 actions, M=40: first countdown 40s (not 30s); after the miss the last countdown is capped at L (20s).
+  it("holds the countdown at the session's minimum and keeps it when the setting changes", async () => {
+    await fake.setDraftLength(1);
+    const settings = await fake.getSettings();
+    await fake.updateSettings({ ...settings, min_action_seconds: 40 });
+    const snap = await fake.startSession();
+    expect(snap.action_seconds_total).toBe(40);
+    await fake.updateSettings({ ...settings, min_action_seconds: 1 });
+    advance(41);
+    const view = await fake.getRunningSession();
+    expect(view?.session.min_action_seconds).toBe(40);
+    expect(view?.snapshot.missed).toBe(1);
+    expect(view?.snapshot.action_seconds_total).toBeCloseTo(20); // capped at L, shorter than M
+  });
+
+  it("rejects a minimum outside 1-600 seconds", async () => {
+    const settings = await fake.getSettings();
+    await expect(fake.updateSettings({ ...settings, min_action_seconds: 0 })).rejects.toThrow(/minimum per action/);
+    await expect(fake.updateSettings({ ...settings, min_action_seconds: 601 })).rejects.toThrow(/minimum per action/);
+  });
+
   it("ends as time_up when the session clock reaches zero", async () => {
     await fake.startSession();
     advance(601);

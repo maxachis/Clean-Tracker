@@ -1,10 +1,11 @@
 # store tests
 
-- **TestOpen_SeedsDefaultSettings**: A fresh in-memory store has the default last session length and miss sound.
+- **TestOpen_SeedsDefaultSettings**: A fresh in-memory store has the default last session length, miss sound and per-action minimum.
 - **TestUpdateSettings_PersistsFields**: Updated settings read back unchanged.
 - **TestSession_RoundTripAndLifecycleQueries**: A new session is the draft, becomes the running session once started, and is in neither query after it ends with a stored status.
 - **TestGetSession_NotFound**: Looking up a missing session wraps ErrNotFound.
 - **TestUpdateSessionLength_PersistsAndRejectsMissing**: The draft length can be changed, and changing a missing session errors.
+- **TestUpdateSessionMinAction_PersistsAndRejectsMissing**: A session's own minimum-per-action copy reads back, and updating a missing session errors.
 - **TestChores_CRUDAndReorder**: Chores can be reordered, edited and deleted, and list in position order.
 - **TestInsertChore_RejectsZeroCount**: The database refuses a chore whose count is below one.
 - **TestEvents_ListedInInsertionOrderWithChoreIDs**: Events come back in ID order with timestamps and the chore ID only on done events.

@@ -45,7 +45,7 @@ func TestOpen_SeedsDefaultSettings(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get: %v", err)
 	}
-	want := model.Settings{LastSessionMinutes: model.DefaultLastSessionMinutes, MissSound: model.DefaultMissSound}
+	want := model.Settings{LastSessionMinutes: model.DefaultLastSessionMinutes, MissSound: model.DefaultMissSound, MinActionSeconds: model.DefaultMinActionSeconds}
 	if got != want {
 		t.Fatalf("settings = %+v, want %+v", got, want)
 	}
@@ -53,11 +53,11 @@ func TestOpen_SeedsDefaultSettings(t *testing.T) {
 
 func TestUpdateSettings_PersistsFields(t *testing.T) {
 	s := openMemory(t)
-	if err := s.UpdateSettings(model.Settings{LastSessionMinutes: 12, MissSound: false}); err != nil {
+	if err := s.UpdateSettings(model.Settings{LastSessionMinutes: 12, MissSound: false, MinActionSeconds: 30}); err != nil {
 		t.Fatalf("update: %v", err)
 	}
 	got, _ := s.GetSettings()
-	if got.LastSessionMinutes != 12 || got.MissSound {
+	if got.LastSessionMinutes != 12 || got.MissSound || got.MinActionSeconds != 30 {
 		t.Fatalf("settings = %+v", got)
 	}
 }
@@ -103,6 +103,22 @@ func TestGetSession_NotFound(t *testing.T) {
 	s := openMemory(t)
 	if _, err := s.GetSession("nope"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("err = %v, want ErrNotFound", err)
+	}
+}
+
+func TestUpdateSessionMinAction_PersistsAndRejectsMissing(t *testing.T) {
+	// The session's own copy of the minimum is what replays read, so it must round-trip.
+	s := openMemory(t)
+	mustInsertSession(t, s, "a", testTime)
+	if err := s.UpdateSessionMinAction("a", 45); err != nil {
+		t.Fatalf("update: %v", err)
+	}
+	got, _ := s.GetSession("a")
+	if got.MinActionSeconds != 45 {
+		t.Fatalf("min action = %d, want 45", got.MinActionSeconds)
+	}
+	if err := s.UpdateSessionMinAction("nope", 5); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("missing session err = %v, want ErrNotFound", err)
 	}
 }
 

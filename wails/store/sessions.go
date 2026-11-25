@@ -9,7 +9,7 @@ import (
 	"github.com/maxachis/clean-tracker/wails/model"
 )
 
-const sessionColumns = `id, length_seconds, created_at, started_at, ended_at, end_status`
+const sessionColumns = `id, length_seconds, min_action_seconds, created_at, started_at, ended_at, end_status`
 
 func scanSession(row interface{ Scan(...any) error }) (model.Session, error) {
 	var (
@@ -17,7 +17,7 @@ func scanSession(row interface{ Scan(...any) error }) (model.Session, error) {
 		created                string
 		started, ended, status sql.NullString
 	)
-	if err := row.Scan(&s.ID, &s.LengthSeconds, &created, &started, &ended, &status); err != nil {
+	if err := row.Scan(&s.ID, &s.LengthSeconds, &s.MinActionSeconds, &created, &started, &ended, &status); err != nil {
 		return model.Session{}, err
 	}
 	var err error
@@ -51,8 +51,8 @@ func (s *Store) querySession(what, where string, args ...any) (model.Session, er
 
 func (s *Store) InsertSession(sess model.Session) error {
 	_, err := s.DB.Exec(
-		`INSERT INTO sessions (`+sessionColumns+`) VALUES (?, ?, ?, ?, ?, ?)`,
-		sess.ID, sess.LengthSeconds, formatTime(sess.CreatedAt),
+		`INSERT INTO sessions (`+sessionColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		sess.ID, sess.LengthSeconds, sess.MinActionSeconds, formatTime(sess.CreatedAt),
 		nullableTime(sess.StartedAt), nullableTime(sess.EndedAt), nullableStatus(sess.EndStatus),
 	)
 	if err != nil {
@@ -84,6 +84,11 @@ func (s *Store) GetRunning() (model.Session, error) {
 
 func (s *Store) UpdateSessionLength(id string, lengthSeconds int) error {
 	return s.execOne("update session length "+id, `UPDATE sessions SET length_seconds = ? WHERE id = ?`, lengthSeconds, id)
+}
+
+// UpdateSessionMinAction sets the session's own copy of the per-action minimum.
+func (s *Store) UpdateSessionMinAction(id string, seconds int) error {
+	return s.execOne("update session min action "+id, `UPDATE sessions SET min_action_seconds = ? WHERE id = ?`, seconds, id)
 }
 
 func (s *Store) MarkSessionStarted(id string, at time.Time) error {

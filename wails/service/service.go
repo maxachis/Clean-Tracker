@@ -19,6 +19,7 @@ var (
 	ErrInvalidChoreName   = errors.New("chore name must not be empty")
 	ErrInvalidChoreCount  = errors.New("chore count must be a whole number of 1 or more")
 	ErrInvalidLength      = errors.New("session length must be above zero minutes")
+	ErrInvalidMinAction   = errors.New("minimum per action must be a whole number of seconds from 1 to 600")
 	ErrNotDraft           = errors.New("chores can only be edited while the session is a draft")
 	ErrReorderMismatch    = errors.New("reorder must list every draft chore exactly once")
 	ErrNoChores           = errors.New("add at least one chore before starting")

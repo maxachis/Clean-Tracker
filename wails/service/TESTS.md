@@ -8,7 +8,9 @@
 - **missing a deadline counts one miss...**: the action stays outstanding and the next countdown is shorter.
 - **several misses while the app was closed**: replaying a long gap counts every deadline that fell inside it.
 - **a miss before a done**: a deadline passed before the next event is counted, and the done still resets the countdown.
-- **the 1-second floor keeps misses finite near L** and **after the floor-limited misses...**: near the end the countdown stops shrinking, so misses stop and time_up follows.
+- **the session minimum keeps misses finite near L (M=1)** and **after the minimum-limited misses...**: near the end the countdown stops shrinking, so misses stop and time_up follows.
+- **misses never come faster than the session minimum** / **with M=10 the minimum-limited misses stop at 16**: L=600, 5 actions, nothing done; after 12 shrinking misses the countdown holds at 10s, four more misses fit, then time_up.
+- **the final countdown may be shorter than the minimum because it is capped at the session length**: L=100, 4 actions, M=30; the last countdown is the 10s that remain.
 - **reaching L with work outstanding is time_up**: a deadline landing on L is not an extra miss.
 - **logging the last action is completed**: completion wins mid-countdown and records the event time.
 - **undo restores a count** / **undo after undo** / **a single undo**: undo reverses the newest not-yet-undone done and resets the countdown.
@@ -16,8 +18,11 @@
 - **end event abandons**: an end event ends the session at its own time.
 - **same-timestamp events order by ID**: ties are broken by event ID, regardless of input order.
 - **events after the session has ended are ignored**.
+- **TestReplayTreatsMinimumBelowOneAsOneSoItAlwaysTerminates**: a zero minimum would make misses converge on L forever and hang the app; replay clamps it to 1 and ends as time up.
 
 ## session_test.go (stateful service over an in-memory store with a fake clock)
+- **TestUpdateSettings_RejectsMinimumOutsideRange**: a per-action minimum below 1 or above 600 is rejected with a clear error; 1 and 600 are accepted.
+- **TestStartSession_CopiesMinimumFromSettingsAndIgnoresLaterChanges**: the session keeps the minimum it started with, so changing the setting mid-session does not move its deadlines.
 - **TestGetDraft_CreatesOnceSeededFromLastSessionMinutes**: only one draft exists and it is seeded from the saved length.
 - **TestAddChore_ValidatesAndTrimsAndAppends**: blank names and counts below one are rejected; names are trimmed; chores append in order.
 - **TestDraftChoreEditing_UpdateRemoveReorder**: draft chores can be edited, removed and reordered, and a partial reorder is rejected.

@@ -62,7 +62,7 @@ func wantErr(t *testing.T, err, target error) {
 
 func TestGetDraft_CreatesOnceSeededFromLastSessionMinutes(t *testing.T) {
 	svc, _ := newTestService(t)
-	if _, err := svc.UpdateSettings(model.UpdateSettingsRequest{LastSessionMinutes: 45, MissSound: true}); err != nil {
+	if _, err := svc.UpdateSettings(model.UpdateSettingsRequest{LastSessionMinutes: 45, MissSound: true, MinActionSeconds: model.DefaultMinActionSeconds}); err != nil {
 		t.Fatalf("settings: %v", err)
 	}
 	first, err := svc.GetDraft()
@@ -433,16 +433,70 @@ func TestRecentChoreNames_CappedAtLimitNewestFirst(t *testing.T) {
 
 func TestUpdateSettings_ValidatesAndPersists(t *testing.T) {
 	svc, _ := newTestService(t)
-	if _, err := svc.UpdateSettings(model.UpdateSettingsRequest{LastSessionMinutes: 0}); !errors.Is(err, ErrInvalidLength) {
+	if _, err := svc.UpdateSettings(model.UpdateSettingsRequest{LastSessionMinutes: 0, MinActionSeconds: model.DefaultMinActionSeconds}); !errors.Is(err, ErrInvalidLength) {
 		t.Fatalf("zero minutes err = %v", err)
 	}
-	got, err := svc.UpdateSettings(model.UpdateSettingsRequest{LastSessionMinutes: 15, MissSound: false})
+	got, err := svc.UpdateSettings(model.UpdateSettingsRequest{LastSessionMinutes: 15, MissSound: false, MinActionSeconds: 20})
 	if err != nil || got.LastSessionMinutes != 15 || got.MissSound {
 		t.Fatalf("settings = %+v, %v", got, err)
 	}
 	reread, _ := svc.GetSettings()
 	if reread != got {
 		t.Fatalf("reread = %+v, want %+v", reread, got)
+	}
+}
+
+func TestUpdateSettings_RejectsMinimumOutsideRange(t *testing.T) {
+	// The per-action minimum must stay within 1-600s; anything else would either
+	// allow endless misses (below 1) or make the timer meaningless (above 600).
+	svc, _ := newTestService(t)
+	for _, bad := range []int{model.MinMinActionSeconds - 1, model.MaxMinActionSeconds + 1, -5} {
+		_, err := svc.UpdateSettings(model.UpdateSettingsRequest{LastSessionMinutes: 10, MinActionSeconds: bad})
+		wantErr(t, err, ErrInvalidMinAction)
+	}
+	for _, ok := range []int{model.MinMinActionSeconds, model.MaxMinActionSeconds} {
+		if _, err := svc.UpdateSettings(model.UpdateSettingsRequest{LastSessionMinutes: 10, MinActionSeconds: ok}); err != nil {
+			t.Fatalf("minimum %d rejected: %v", ok, err)
+		}
+	}
+	got, _ := svc.GetSettings()
+	if got.MinActionSeconds != model.MaxMinActionSeconds {
+		t.Fatalf("stored minimum = %d, want the last accepted value", got.MinActionSeconds)
+	}
+}
+
+func TestStartSession_CopiesMinimumFromSettingsAndIgnoresLaterChanges(t *testing.T) {
+	// A running session keeps the minimum it started with, so editing the
+	// setting mid-session cannot move deadlines the user is already racing.
+	svc, clock := newTestService(t)
+	if _, err := svc.UpdateSettings(model.UpdateSettingsRequest{LastSessionMinutes: 10, MinActionSeconds: 100}); err != nil {
+		t.Fatalf("settings: %v", err)
+	}
+	if _, err := svc.SetDraftLength(1); err != nil {
+		t.Fatalf("length: %v", err)
+	}
+	mustAdd(t, svc, "Boxes", 4)
+	if _, err := svc.StartSession(); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	running, _ := svc.GetRunningSession()
+	if running.Session.MinActionSeconds != 100 {
+		t.Fatalf("session minimum = %d, want 100 copied from settings", running.Session.MinActionSeconds)
+	}
+	if _, err := svc.UpdateSettings(model.UpdateSettingsRequest{LastSessionMinutes: 10, MinActionSeconds: 1}); err != nil {
+		t.Fatalf("change settings: %v", err)
+	}
+	// L=60, n=4, M=100: even split 15s is below M, so the countdown is 100s capped at L=60.
+	clock.Advance(1)
+	snap, err := svc.GetRunningSession()
+	if err != nil || snap == nil {
+		t.Fatalf("running: %v %v", snap, err)
+	}
+	if snap.Snapshot.ActionSecondsTotal != 60 || snap.Snapshot.Missed != 0 {
+		t.Fatalf("snapshot = %+v, want a 60s countdown and no misses (session minimum 100 still applies)", snap.Snapshot)
+	}
+	if snap.Session.MinActionSeconds != 100 {
+		t.Fatalf("stored session minimum changed to %d", snap.Session.MinActionSeconds)
 	}
 }
 

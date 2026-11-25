@@ -67,3 +67,42 @@ func TestRun_RejectsChoreCountBelowOne(t *testing.T) {
 		t.Fatal("expected CHECK constraint failure for target_count = 0")
 	}
 }
+
+func TestRun_UpgradesDatabaseFromBeforeMinAction(t *testing.T) {
+	// A database created by the previous build has no min_action_seconds columns;
+	// Run must add them (default 10) without losing the rows already there.
+	db, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "old.db"))
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	db.SetMaxOpenConns(1)
+	t.Cleanup(func() { _ = db.Close() })
+	oldSchema := []string{
+		`CREATE TABLE sessions (id TEXT PRIMARY KEY, length_seconds INTEGER NOT NULL, created_at TEXT NOT NULL, started_at TEXT, ended_at TEXT, end_status TEXT)`,
+		`CREATE TABLE settings (id INTEGER PRIMARY KEY CHECK(id = 1), last_session_minutes INTEGER NOT NULL, miss_sound INTEGER NOT NULL)`,
+		`INSERT INTO sessions (id, length_seconds, created_at) VALUES ('old', 600, 'x')`,
+		`INSERT INTO settings (id, last_session_minutes, miss_sound) VALUES (1, 20, 0)`,
+	}
+	for _, stmt := range oldSchema {
+		if _, err := db.Exec(stmt); err != nil {
+			t.Fatalf("build old schema: %v", err)
+		}
+	}
+
+	for pass := 1; pass <= 2; pass++ { // the second pass proves the upgrade is idempotent
+		if err := Run(db); err != nil {
+			t.Fatalf("run pass %d: %v", pass, err)
+		}
+	}
+
+	var sessionMin, settingsMin, minutes int
+	if err := db.QueryRow(`SELECT min_action_seconds FROM sessions WHERE id = 'old'`).Scan(&sessionMin); err != nil {
+		t.Fatalf("sessions column: %v", err)
+	}
+	if err := db.QueryRow(`SELECT min_action_seconds, last_session_minutes FROM settings WHERE id = 1`).Scan(&settingsMin, &minutes); err != nil {
+		t.Fatalf("settings column: %v", err)
+	}
+	if sessionMin != model.DefaultMinActionSeconds || settingsMin != model.DefaultMinActionSeconds || minutes != 20 {
+		t.Fatalf("session min %d, settings min %d, minutes %d; want defaults and the old 20 kept", sessionMin, settingsMin, minutes)
+	}
+}

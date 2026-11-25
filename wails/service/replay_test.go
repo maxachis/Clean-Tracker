@@ -11,8 +11,10 @@ import (
 const (
 	floatTolerance = 1e-6
 	sessionLength  = 600
-	choreA         = "chore-a"
-	choreB         = "chore-b"
+	// defaultTestMinimum keeps the floor out of the way (1s) for cases that are not about it.
+	defaultTestMinimum = 1
+	choreA             = "chore-a"
+	choreB             = "chore-b"
 )
 
 var replayBase = time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
@@ -110,12 +112,13 @@ func outstandingOf(s model.Snapshot, choreID string) int {
 
 func TestReplay(t *testing.T) {
 	tests := []struct {
-		name   string
-		length int
-		chores []model.Chore
-		events []model.Event
-		nowSec float64
-		want   wantSnapshot
+		name    string
+		length  int
+		minimum int // session minimum per action; defaultTestMinimum when zero
+		chores  []model.Chore
+		events  []model.Event
+		nowSec  float64
+		want    wantSnapshot
 	}{
 		{
 			// With nothing logged, the whole session is divided evenly by the actions to do.
@@ -161,15 +164,36 @@ func TestReplay(t *testing.T) {
 			want: wantSnapshot{status: model.StatusActive, done: 1, outstanding: 4, missed: 1, sessionLeft: 470, actionLeft: 117.5, actionTotal: 117.5},
 		},
 		{
-			// L=10, 2 actions: misses at 5, 7.5, 8.75, 9.75; then the 1s floor puts the next deadline past L.
-			name:   "the 1-second floor keeps misses finite near L",
-			length: 10, chores: singleChore(2), nowSec: 9.8,
+			// L=10, 2 actions, M=1: misses at 5, 7.5, 8.75, 9.75; then the minimum puts the next deadline past L.
+			name:   "the session minimum keeps misses finite near L (M=1)",
+			length: 10, minimum: 1, chores: singleChore(2), nowSec: 9.8,
 			want: wantSnapshot{status: model.StatusActive, outstanding: 2, missed: 4, sessionLeft: 0.2, actionLeft: 0.2, actionTotal: 0.25},
 		},
 		{
-			name:   "after the floor-limited misses the session ends time_up at L with no further misses",
-			length: 10, chores: singleChore(2), nowSec: 1000,
+			name:   "after the minimum-limited misses the session ends time_up at L with no further misses",
+			length: 10, minimum: 1, chores: singleChore(2), nowSec: 1000,
 			want: wantSnapshot{status: model.StatusTimeUp, outstanding: 2, missed: 4, endedAtSec: secPtr(10)},
+		},
+		{
+			// L=600, n=5, nothing done: each miss shrinks the countdown by 0.8x (120, 96, ...) until it would
+			// drop under M=10. After the 12th miss (at 600*(1-0.8^12)) the even split is 8.25s, so M=10 applies.
+			name:   "misses never come faster than the session minimum (countdown held at M=10)",
+			length: sessionLength, minimum: 10, chores: singleChore(5),
+			nowSec: 600*(1-math.Pow(0.8, 12)) + 3,
+			want: wantSnapshot{status: model.StatusActive, outstanding: 5, missed: 12,
+				sessionLeft: 600 - 600*(1-math.Pow(0.8, 12)) - 3, actionLeft: 7, actionTotal: 10},
+		},
+		{
+			// Same run: four more 10s misses fit before L (41.3s left), then the last countdown hits L.
+			name:   "with M=10 the minimum-limited misses stop at 16, then time_up",
+			length: sessionLength, minimum: 10, chores: singleChore(5), nowSec: 1000,
+			want: wantSnapshot{status: model.StatusTimeUp, outstanding: 5, missed: 16, endedAtSec: secPtr(600)},
+		},
+		{
+			// L=100, n=4, M=30: misses at 30, 60, 90; the last countdown would be 30s but only 10s remain.
+			name:   "the final countdown may be shorter than the minimum because it is capped at the session length",
+			length: 100, minimum: 30, chores: singleChore(4), nowSec: 95,
+			want: wantSnapshot{status: model.StatusActive, outstanding: 4, missed: 3, sessionLeft: 5, actionLeft: 5, actionTotal: 10},
 		},
 		{
 			// The single deadline lands exactly on L, which time-up already covers.
@@ -256,17 +280,46 @@ func TestReplay(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			minimum := tc.minimum
+			if minimum == 0 {
+				minimum = defaultTestMinimum
+			}
 			got := Replay(ReplayInput{
-				LengthSeconds: tc.length,
-				StartedAt:     replayBase,
-				Chores:        tc.chores,
-				Events:        tc.events,
-				Now:           atSeconds(tc.nowSec),
+				LengthSeconds:    tc.length,
+				MinActionSeconds: minimum,
+				StartedAt:        replayBase,
+				Chores:           tc.chores,
+				Events:           tc.events,
+				Now:              atSeconds(tc.nowSec),
 			})
 			assertSnapshot(t, got, tc.want)
 			if !got.AsOf.Equal(atSeconds(tc.nowSec)) {
 				t.Errorf("as_of = %v, want now", got.AsOf)
 			}
 		})
+	}
+}
+
+// A zero minimum would make misses converge on the session length without
+// reaching it, so replay would never return and the app would hang. Settings
+// validation should prevent it, but replay must terminate regardless.
+func TestReplayTreatsMinimumBelowOneAsOneSoItAlwaysTerminates(t *testing.T) {
+	done := make(chan model.Snapshot, 1)
+	go func() {
+		done <- Replay(ReplayInput{
+			LengthSeconds:    sessionLength,
+			MinActionSeconds: 0,
+			StartedAt:        replayBase,
+			Chores:           standardChores(),
+			Now:              atSeconds(sessionLength + 1),
+		})
+	}()
+	select {
+	case snap := <-done:
+		if snap.Status != model.StatusTimeUp {
+			t.Fatalf("status = %s, want %s", snap.Status, model.StatusTimeUp)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("replay with a zero minimum did not terminate")
 	}
 }

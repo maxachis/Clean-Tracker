@@ -1,6 +1,7 @@
 CREATE TABLE IF NOT EXISTS sessions (
     id TEXT PRIMARY KEY,
     length_seconds INTEGER NOT NULL,
+    min_action_seconds INTEGER NOT NULL DEFAULT 10,
     created_at TEXT NOT NULL,
     started_at TEXT,
     ended_at TEXT,
@@ -30,5 +31,6 @@ CREATE INDEX IF NOT EXISTS idx_events_session ON events(session_id, id);
 CREATE TABLE IF NOT EXISTS settings (
     id INTEGER PRIMARY KEY CHECK(id = 1),
     last_session_minutes INTEGER NOT NULL,
-    miss_sound INTEGER NOT NULL
+    miss_sound INTEGER NOT NULL,
+    min_action_seconds INTEGER NOT NULL DEFAULT 10
 );

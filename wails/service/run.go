@@ -23,6 +23,9 @@ func (s *Service) StartSession() (model.Snapshot, error) {
 	if err := validateStartable(d); err != nil {
 		return model.Snapshot{}, err
 	}
+	if err := s.copyMinActionToSession(d.Session.ID); err != nil {
+		return model.Snapshot{}, err
+	}
 	if err := s.Store.MarkSessionStarted(d.Session.ID, s.clock()); err != nil {
 		return model.Snapshot{}, err
 	}
@@ -44,6 +47,16 @@ func validateStartable(d model.Draft) error {
 		return ErrInvalidLength
 	}
 	return nil
+}
+
+// copyMinActionToSession freezes the current setting onto the session, so
+// later changes to the setting never move a running session's deadlines.
+func (s *Service) copyMinActionToSession(sessionID string) error {
+	settings, err := s.Store.GetSettings()
+	if err != nil {
+		return err
+	}
+	return s.Store.UpdateSessionMinAction(sessionID, settings.MinActionSeconds)
 }
 
 func (s *Service) rememberLength(lengthSeconds int) error {
@@ -124,11 +137,12 @@ func (s *Service) replay(sess model.Session) (model.Snapshot, error) {
 		return model.Snapshot{}, err
 	}
 	return Replay(ReplayInput{
-		LengthSeconds: sess.LengthSeconds,
-		StartedAt:     *sess.StartedAt,
-		Chores:        chores,
-		Events:        events,
-		Now:           s.clock(),
+		LengthSeconds:    sess.LengthSeconds,
+		MinActionSeconds: sess.MinActionSeconds,
+		StartedAt:        *sess.StartedAt,
+		Chores:           chores,
+		Events:           events,
+		Now:              s.clock(),
 	}), nil
 }
 

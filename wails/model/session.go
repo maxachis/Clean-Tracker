@@ -4,13 +4,16 @@ import "time"
 
 // Session is a timed cleaning session. StartedAt is nil while it is a draft;
 // EndedAt and EndStatus are written once replay finds a terminal status.
+// MinActionSeconds is the session's own copy of the minimum-per-action setting,
+// fixed when the session starts.
 type Session struct {
-	ID            string         `json:"id"`
-	LengthSeconds int            `json:"length_seconds"`
-	CreatedAt     time.Time      `json:"created_at"`
-	StartedAt     *time.Time     `json:"started_at,omitempty"`
-	EndedAt       *time.Time     `json:"ended_at,omitempty"`
-	EndStatus     *SessionStatus `json:"end_status,omitempty"`
+	ID               string         `json:"id"`
+	LengthSeconds    int            `json:"length_seconds"`
+	MinActionSeconds int            `json:"min_action_seconds"`
+	CreatedAt        time.Time      `json:"created_at"`
+	StartedAt        *time.Time     `json:"started_at,omitempty"`
+	EndedAt          *time.Time     `json:"ended_at,omitempty"`
+	EndStatus        *SessionStatus `json:"end_status,omitempty"`
 }
 
 // Chore is one named job in a session and how many times it must be done.

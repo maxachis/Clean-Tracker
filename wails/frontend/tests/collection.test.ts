@@ -26,6 +26,15 @@ async function addChore(view: View, name: string, count: number) {
   await settle();
 }
 
+const MINIMUM_LABEL = "Minimum per action in seconds";
+
+async function setMinimum(view: View, value: string) {
+  const input = view.getByLabelText(MINIMUM_LABEL);
+  await fireEvent.input(input, { target: { value } });
+  await fireEvent.change(input);
+  await settle();
+}
+
 describe("Collection screen", () => {
   // You can't start an empty session; the button must say so by being disabled.
   it("disables Start until there is at least one chore", async () => {
@@ -86,5 +95,32 @@ describe("Collection screen", () => {
     await fireEvent.click(view.getByRole("button", { name: "Remove Dishes" }));
     await settle();
     expect(view.queryByDisplayValue("Dishes")).toBeNull();
+  });
+
+  // The minimum is a setting; each new session copies it when it starts.
+  it("saves the minimum per action as a setting when it changes", async () => {
+    const fake = freshBackend();
+    const view = await openCollection();
+    expect((view.getByLabelText(MINIMUM_LABEL) as HTMLInputElement).value).toBe("10");
+    await setMinimum(view, "25");
+    expect((await fake.getSettings()).min_action_seconds).toBe(25);
+  });
+
+  it("rejects an out-of-range minimum inline and keeps the saved value", async () => {
+    const fake = freshBackend();
+    const view = await openCollection();
+    await setMinimum(view, "601");
+    expect(view.getByRole("alert").textContent).toMatch(/minimum per action/);
+    expect((await fake.getSettings()).min_action_seconds).toBe(10);
+  });
+
+  // Splitting 30 minutes over 200 actions is 9s each, under the 10s default minimum.
+  it("warns when the even split is below the minimum, and not otherwise", async () => {
+    const view = await openCollection();
+    await addChore(view, "Dishes", 12);
+    expect(view.queryByText(/below your/)).toBeNull();
+    await addChore(view, "Crumbs", 188);
+    expect(view.getByText(/200 actions/)).toBeTruthy();
+    expect(view.getByText(/below your 0:10 minimum/)).toBeTruthy();
   });
 });

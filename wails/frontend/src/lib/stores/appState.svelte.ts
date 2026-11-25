@@ -10,7 +10,7 @@ export const Screen = {
 } as const;
 export type Screen = (typeof Screen)[keyof typeof Screen];
 
-const FALLBACK_SETTINGS: Settings = { last_session_minutes: 30, miss_sound: true };
+const FALLBACK_SETTINGS: Settings = { last_session_minutes: 30, miss_sound: true, min_action_seconds: 10 };
 
 interface AppState {
   screen: Screen;
@@ -62,4 +62,9 @@ export async function setMissSound(enabled: boolean): Promise<void> {
   const next = { ...appState.settings, miss_sound: enabled };
   appState.settings = next;
   appState.settings = await api.updateSettings(next);
+}
+
+/** Saves the per-action minimum; rejects (with the backend's message) when out of range. */
+export async function setMinActionSeconds(seconds: number): Promise<void> {
+  appState.settings = await api.updateSettings({ ...appState.settings, min_action_seconds: seconds });
 }

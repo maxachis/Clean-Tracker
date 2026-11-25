@@ -11,7 +11,9 @@ import { SessionStatus } from "./types";
 
 const MS_PER_SECOND = 1000;
 const SECONDS_PER_MINUTE = 60;
-const MIN_ACTION_SECONDS = 1;
+const DEFAULT_MIN_ACTION_SECONDS = 10;
+const MIN_MIN_ACTION_SECONDS = 1;
+const MAX_MIN_ACTION_SECONDS = 600;
 const DEFAULT_MINUTES = 30;
 const SEED_RECENT_NAMES = [
   "Wipe counters", "Pick up boxes", "Dishes", "Vacuum living room", "Take out trash", "Fold laundry",
@@ -21,6 +23,7 @@ const ERR = {
   choreName: "chore name must not be empty",
   choreCount: "chore count must be a whole number of 1 or more",
   length: "session length must be above zero minutes",
+  minAction: "minimum per action must be a whole number of seconds from 1 to 600",
   noChores: "add at least one chore before starting",
   running: "another session is already running",
   noRunning: "no session is running",
@@ -52,7 +55,7 @@ export interface FakeOptions {
 export function createFakeBackend(options: FakeOptions = {}): Backend {
   const now = options.now ?? (() => Date.now());
   const sessions = new Map<string, FakeSession>();
-  let settings: Settings = { last_session_minutes: DEFAULT_MINUTES, miss_sound: true };
+  let settings: Settings = { last_session_minutes: DEFAULT_MINUTES, miss_sound: true, min_action_seconds: DEFAULT_MIN_ACTION_SECONDS };
   let draftId = "";
   let nextId = 1;
   const seedNames = options.recentNames ?? SEED_RECENT_NAMES;
@@ -65,6 +68,7 @@ export function createFakeBackend(options: FakeOptions = {}): Backend {
       session: {
         id: sessionId,
         length_seconds: settings.last_session_minutes * SECONDS_PER_MINUTE,
+        min_action_seconds: settings.min_action_seconds,
         created_at: iso(now()),
       },
       chores: [], events: [], settled: false,
@@ -170,6 +174,7 @@ export function createFakeBackend(options: FakeOptions = {}): Backend {
         settle(live, snap);
         if (!live.settled) throw new Error(ERR.running);
       }
+      d.session.min_action_seconds = settings.min_action_seconds;
       d.startedMs = now();
       d.session.started_at = iso(d.startedMs);
       settings = { ...settings, last_session_minutes: d.session.length_seconds / SECONDS_PER_MINUTE };
@@ -219,6 +224,8 @@ export function createFakeBackend(options: FakeOptions = {}): Backend {
     async getSettings() { return { ...settings }; },
     async updateSettings(req) {
       if (req.last_session_minutes < 1) throw new Error(ERR.length);
+      const m = req.min_action_seconds;
+      if (!Number.isInteger(m) || m < MIN_MIN_ACTION_SECONDS || m > MAX_MIN_ACTION_SECONDS) throw new Error(ERR.minAction);
       settings = { ...req };
       return { ...settings };
     },
@@ -230,6 +237,7 @@ export function createFakeBackend(options: FakeOptions = {}): Backend {
 
 function replay(fake: FakeSession, nowMs: number): Snapshot {
   const length = fake.session.length_seconds;
+  const minAction = fake.session.min_action_seconds;
   const startMs = fake.startedMs!;
   const outstanding = new Map(fake.chores.map((c) => [c.id, c.target_count]));
   const doneStack: string[] = [];
@@ -239,11 +247,11 @@ function replay(fake: FakeSession, nowMs: number): Snapshot {
   let paused = false;
   let missed = 0;
   let resetAt = 0;
-  let deadline = deadlineFor(0, left, length);
+  let deadline = deadlineFor(0, left, length, minAction);
   let status: SessionStatus = SessionStatus.Active;
   let endedMs: number | undefined;
 
-  const reset = () => { resetAt = active; deadline = deadlineFor(active, left, length); };
+  const reset = () => { resetAt = active; deadline = deadlineFor(active, left, length, minAction); };
   const advanceTo = (targetMs: number): boolean => {
     if (!paused) {
       const target = active + (targetMs - wallMs) / MS_PER_SECOND;
@@ -310,7 +318,7 @@ function replay(fake: FakeSession, nowMs: number): Snapshot {
   };
 }
 
-function deadlineFor(active: number, left: number, length: number): number {
-  const perAction = Math.max((length - active) / Math.max(left, 1), MIN_ACTION_SECONDS);
+function deadlineFor(active: number, left: number, length: number, minAction: number): number {
+  const perAction = Math.max((length - active) / Math.max(left, 1), minAction);
   return Math.min(active + perAction, length);
 }

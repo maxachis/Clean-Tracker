@@ -1,9 +1,9 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { api, errorMessage } from "../lib/api";
-  import { appState, showExecution } from "../lib/stores/appState.svelte";
+  import { appState, setMinActionSeconds, showExecution } from "../lib/stores/appState.svelte";
   import { formatShortClock } from "../lib/services/countdown";
-  import { averageSecondsPerAction } from "../lib/services/pace";
+  import { averageSecondsPerAction, isBelowMinimum } from "../lib/services/pace";
   import type { Draft, MoveDirection } from "../lib/types";
   import AddChoreRow from "../lib/components/AddChoreRow.svelte";
   import ChoreRow from "../lib/components/ChoreRow.svelte";
@@ -17,9 +17,14 @@
   let minutesText = $state(String((appState.draft?.session.length_seconds ?? 0) / SECONDS_PER_MINUTE));
   let suggestions = $state<string[]>([]);
   let error = $state("");
+  let minActionText = $state(String(appState.settings.min_action_seconds));
+  let minActionError = $state("");
 
   const minutes = $derived(Number(minutesText));
   const average = $derived(averageSecondsPerAction({ totalActions, minutes }));
+  const belowMinimum = $derived(
+    isBelowMinimum({ averageSeconds: average, minimumSeconds: appState.settings.min_action_seconds }),
+  );
   const canStart = $derived(chores.length > 0 && Number.isInteger(minutes) && minutes > 0);
 
   onMount(async () => {
@@ -45,6 +50,15 @@
     const target = direction === "up" ? index - 1 : index + 1;
     [ids[index], ids[target]] = [ids[target], ids[index]];
     return apply(() => api.reorderChores(ids));
+  }
+
+  async function commitMinAction() {
+    minActionError = "";
+    try {
+      await setMinActionSeconds(Number(minActionText));
+    } catch (err) {
+      minActionError = errorMessage(err);
+    }
   }
 
   const commitMinutes = () => apply(() => api.setDraftLength(minutes));
@@ -100,10 +114,31 @@
       </span>
     </label>
 
+    <label class="min-action">
+      <span>Minimum per action</span>
+      <span class="min-action-field">
+        <input
+          class="num"
+          type="number"
+          min="1"
+          max="600"
+          inputmode="numeric"
+          bind:value={minActionText}
+          onchange={commitMinAction}
+          aria-label="Minimum per action in seconds"
+        />
+        <span>sec</span>
+      </span>
+    </label>
+    {#if minActionError}<p class="error" role="alert">{minActionError}</p>{/if}
+
     <p class="pace num" aria-live="polite">
       <strong>{totalActions} {totalActions === 1 ? "action" : "actions"}</strong>
       {#if average !== null}
         <span> · ~{formatShortClock(average)} each</span>
+        {#if belowMinimum}
+          <span class="warn"> · below your {formatShortClock(appState.settings.min_action_seconds)} minimum</span>
+        {/if}
       {/if}
     </p>
 
@@ -132,6 +167,14 @@
     font-size: 3rem; font-weight: 800; font-variation-settings: "wdth" var(--wdth-wide); padding: 0;
   }
   .minutes input:focus { outline: none; border-bottom-color: var(--signal); }
+  .min-action { display: flex; flex-direction: column; gap: var(--space-2); font-weight: 700; }
+  .min-action-field { display: flex; align-items: baseline; gap: var(--space-2); }
+  .min-action input {
+    width: 5rem; border: 0; border-bottom: var(--border); background: transparent;
+    font-size: 1.4rem; font-weight: 800; padding: 0;
+  }
+  .min-action input:focus { outline: none; border-bottom-color: var(--signal); }
+  .warn { font-weight: 800; }
   .pace { font-size: 1.05rem; line-height: 1.4; }
   .pace strong { font-weight: 800; }
   .start { font-size: 1.6rem; padding: var(--space-3) var(--space-4); font-variation-settings: "wdth" var(--wdth-wide); font-weight: 800; }
